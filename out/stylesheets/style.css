@@ -1,0 +1,29 @@
+html, body {
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+div {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+#renderCanvas {
+    z-index: 0;
+}
+
+#layerCanvas {
+    background: transparent;
+    z-index: 1;
+}
