@@ -1,5 +1,7 @@
 /// <reference path="camera-rotation.ts" />
 
+const MAX_IMAGES = 1000;
+
 class WorkSpace {
 
     private _renderCanvas: HTMLCanvasElement;
@@ -7,6 +9,10 @@ class WorkSpace {
     private _engine: BABYLON.Engine;
     private _scene: BABYLON.Scene;
     private _hdrTexture: BABYLON.CubeTexture;
+    private _isBoundingBox: boolean = true;
+    private _isCaptureBox: boolean = false;
+    private _countPendingImages: number = 0;
+    private _countCompletedImages: number = 0;
     private _xboxMesh: BABYLON.Mesh | null = null;
 
     constructor(renderCanvas: string, layerCanvas: string) {
@@ -14,6 +20,20 @@ class WorkSpace {
         // Create canvas and engine.
         this._renderCanvas = document.getElementById(renderCanvas) as HTMLCanvasElement;
         this._layerCanvas = document.getElementById(layerCanvas) as HTMLCanvasElement;
+
+        let boundingCheckBox = document.getElementById("boundingCheckBox") as HTMLInputElement;
+        if (boundingCheckBox) {
+            boundingCheckBox.onclick = (ev: any) => {
+                this._isBoundingBox = boundingCheckBox.checked;
+            };
+        }
+
+        let captureCheckBox = document.getElementById("captureCheckBox") as HTMLInputElement;
+        if (captureCheckBox) {
+            captureCheckBox.onclick = (ev: any) => {
+                this._isCaptureBox = boundingCheckBox.checked;
+            };
+        }
 
         this._engine = new BABYLON.Engine(this._renderCanvas, true, { preserveDrawingBuffer: true });
         this._engine.enableOfflineSupport = false;
@@ -107,11 +127,16 @@ class WorkSpace {
         }
     }
 
-    uploadScreenshot() : void {
-        if (this._scene.activeCamera) {
-            console.log('screenshot');
-            BABYLON.Tools.CreateScreenshot(this._engine, this._scene.activeCamera, { precision: 1 }, (data) => {
+    triggerTraining(): void {
+        console.log('triggered');
+    }
 
+    uploadScreenshot(bbox: BoundingBox): void {
+        if (this._scene.activeCamera && (this._countPendingImages < MAX_IMAGES)) {
+            
+            this._countPendingImages += 1;
+
+            BABYLON.Tools.CreateScreenshot(this._engine, this._scene.activeCamera, { precision: 1 }, (data) => {
                 fetch('http://localhost:8081/image',
                     {
                         headers: {
@@ -119,9 +144,17 @@ class WorkSpace {
                             'Content-Type': 'application/json'
                         },
                         method: "POST",
-                        body: JSON.stringify({ 'data': data })
+                        body: JSON.stringify({
+                            'data': data,
+                            'bbox': bbox.toString()
+                        })
                     }).then((data) => {
+                        this._countCompletedImages += 1;
                         console.log('upload succeded', data);
+
+                        if (this._countCompletedImages == MAX_IMAGES) {
+                            this.triggerTraining();
+                        }
                     })
                     .catch((error) => {
                         console.log('upload failed', error);
@@ -130,7 +163,7 @@ class WorkSpace {
         }
     }
 
-    drawAIBoundingBox(): void {
+    drawAIBoundingBox(): BoundingBox | undefined {
         if (this._xboxMesh) {
 
             let positions = this._xboxMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
@@ -170,31 +203,32 @@ class WorkSpace {
                 if (x2 < width - MARGIN) x2 += MARGIN;
                 if (y2 < height - MARGIN) y2 += MARGIN;
 
-                //console.log(`${x1},${y1},${x2},${y2}`);
-
                 // Draw the 2D bounding box on the layer canvas
-                var context = this._layerCanvas.getContext('2d');
+                let context = this._layerCanvas.getContext('2d');
 
                 if (context) {
-                    context.beginPath();
-                    context.rect(x1, y1, x2 - x1, y2 - y1);
-                    context.lineWidth = 1;
-                    context.strokeStyle = 'yellow';
-                    context.stroke();
+                    if (this._isBoundingBox) {
+                        context.beginPath();
+                        context.rect(x1, y1, x2 - x1, y2 - y1);
+                        context.lineWidth = 1;
+                        context.strokeStyle = 'yellow';
+                        context.stroke();
+                    }
+                    else {
+                        context.clearRect(0, 0, this._layerCanvas.width, this._layerCanvas.height);
+                    }
                 }
+
+                return new BoundingBox(x1, y1, x2, y2);
             }
         }
+
+        return undefined;
     }
 
     sceneLoaded(scene: BABYLON.Scene): void {
         this._scene = scene;
-
-        this._scene.onAfterRenderObservable.add(() => {
-            this.drawAIBoundingBox();
-        });
-
         this._xboxMesh = <BABYLON.Mesh>this._scene.getMeshByName('node_id29');
-        //this._xboxMesh.showBoundingBox = true;
 
         this.initCameraAndLight(scene.meshes);
     }
@@ -207,7 +241,11 @@ class WorkSpace {
             scene.whenReadyAsync().then(() => {
                 this._engine.runRenderLoop(() => {
                     this._scene.render();
-                    //this.uploadScreenshot();
+                    let bbox = this.drawAIBoundingBox();
+
+                    if (bbox && this._isCaptureBox) {
+                        this.uploadScreenshot(bbox);
+                    }
                 });
             })
         }).catch((reason) => { console.log(reason.message) });
@@ -229,3 +267,23 @@ window.addEventListener('DOMContentLoaded', () => {
     workspace.addListeners();
     workspace.createScene();
 });
+
+
+class BoundingBox {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+
+    constructor(x1: number, y1: number, x2: number, y2: number) {
+        this.x1 = x1,
+            this.y1 = y1,
+            this.x2 = x2,
+            this.y2 = y2
+    }
+
+    toString(): string {
+        return `${this.x1}\t${this.y1}\t${this.x2}\t${this.y2}`;
+    }
+}
+

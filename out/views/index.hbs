@@ -1,0 +1,38 @@
+<!doctype html>
+
+
+<html>
+    <head>
+        <meta http-equiv='Content-Type' content='text/html' charset='utf-8'>
+        <title>{{title}}</title>
+        <script src='https://preview.babylonjs.com/babylon.js'></script>
+        <script src='https://preview.babylonjs.com/loaders/babylonjs.loaders.min.js'></script>
+        <script src='https://preview.babylonjs.com/materialsLibrary/babylonjs.materials.min.js'></script>
+        <script src='https://code.jquery.com/pep/0.4.1/pep.js'></script>
+        <script src='index.js'></script>
+        <script src='camera-rotation.js'></script>
+        <link rel='stylesheet' href='style.css'>
+    </head>
+    <body>
+        <div id="playground">
+            <canvas id="renderCanvas"></canvas>
+            <canvas id="layerCanvas"></canvas>
+        </div>
+        <div id="settings">
+            <fieldset>
+                <legend>Settings</legend>
+                <div>
+                    <input type="checkbox" id="boundingCheckBox" checked>
+                    <label for="boundingCheckBox">Draw Bounding Box</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="captureCheckBox">
+                    <label for="captureCheckBox">Start Capture</label>
+                </div>
+            </fieldset>
+        </div>
+    </body>
+</html>
+
+
+

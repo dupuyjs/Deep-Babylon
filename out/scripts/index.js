@@ -1,11 +1,28 @@
 "use strict";
 /// <reference path="camera-rotation.ts" />
+const MAX_IMAGES = 1000;
 class WorkSpace {
     constructor(renderCanvas, layerCanvas) {
+        this._isBoundingBox = true;
+        this._isCaptureBox = false;
+        this._countPendingImages = 0;
+        this._countCompletedImages = 0;
         this._xboxMesh = null;
         // Create canvas and engine.
         this._renderCanvas = document.getElementById(renderCanvas);
         this._layerCanvas = document.getElementById(layerCanvas);
+        let boundingCheckBox = document.getElementById("boundingCheckBox");
+        if (boundingCheckBox) {
+            boundingCheckBox.onclick = (ev) => {
+                this._isBoundingBox = boundingCheckBox.checked;
+            };
+        }
+        let captureCheckBox = document.getElementById("captureCheckBox");
+        if (captureCheckBox) {
+            captureCheckBox.onclick = (ev) => {
+                this._isCaptureBox = boundingCheckBox.checked;
+            };
+        }
         this._engine = new BABYLON.Engine(this._renderCanvas, true, { preserveDrawingBuffer: true });
         this._engine.enableOfflineSupport = false;
         // Create a basic Babylon Scene object.
@@ -77,9 +94,12 @@ class WorkSpace {
             camera.attachControl(this._renderCanvas);
         }
     }
-    uploadScreenshot() {
-        if (this._scene.activeCamera) {
-            console.log('screenshot');
+    triggerTraining() {
+        console.log('triggered');
+    }
+    uploadScreenshot(bbox) {
+        if (this._scene.activeCamera && (this._countPendingImages < MAX_IMAGES)) {
+            this._countPendingImages += 1;
             BABYLON.Tools.CreateScreenshot(this._engine, this._scene.activeCamera, { precision: 1 }, (data) => {
                 fetch('http://localhost:8081/image', {
                     headers: {
@@ -87,9 +107,16 @@ class WorkSpace {
                         'Content-Type': 'application/json'
                     },
                     method: "POST",
-                    body: JSON.stringify({ 'data': data })
+                    body: JSON.stringify({
+                        'data': data,
+                        'bbox': bbox.toString()
+                    })
                 }).then((data) => {
+                    this._countCompletedImages += 1;
                     console.log('upload succeded', data);
+                    if (this._countCompletedImages == MAX_IMAGES) {
+                        this.triggerTraining();
+                    }
                 })
                     .catch((error) => {
                     console.log('upload failed', error);
@@ -129,26 +156,28 @@ class WorkSpace {
                     x2 += MARGIN;
                 if (y2 < height - MARGIN)
                     y2 += MARGIN;
-                //console.log(`${x1},${y1},${x2},${y2}`);
                 // Draw the 2D bounding box on the layer canvas
-                var context = this._layerCanvas.getContext('2d');
+                let context = this._layerCanvas.getContext('2d');
                 if (context) {
-                    context.beginPath();
-                    context.rect(x1, y1, x2 - x1, y2 - y1);
-                    context.lineWidth = 1;
-                    context.strokeStyle = 'yellow';
-                    context.stroke();
+                    if (this._isBoundingBox) {
+                        context.beginPath();
+                        context.rect(x1, y1, x2 - x1, y2 - y1);
+                        context.lineWidth = 1;
+                        context.strokeStyle = 'yellow';
+                        context.stroke();
+                    }
+                    else {
+                        context.clearRect(0, 0, this._layerCanvas.width, this._layerCanvas.height);
+                    }
                 }
+                return new BoundingBox(x1, y1, x2, y2);
             }
         }
+        return undefined;
     }
     sceneLoaded(scene) {
         this._scene = scene;
-        this._scene.onAfterRenderObservable.add(() => {
-            this.drawAIBoundingBox();
-        });
         this._xboxMesh = this._scene.getMeshByName('node_id29');
-        //this._xboxMesh.showBoundingBox = true;
         this.initCameraAndLight(scene.meshes);
     }
     createScene() {
@@ -157,7 +186,10 @@ class WorkSpace {
             scene.whenReadyAsync().then(() => {
                 this._engine.runRenderLoop(() => {
                     this._scene.render();
-                    //this.uploadScreenshot();
+                    let bbox = this.drawAIBoundingBox();
+                    if (bbox && this._isCaptureBox) {
+                        this.uploadScreenshot(bbox);
+                    }
                 });
             });
         }).catch((reason) => { console.log(reason.message); });
@@ -175,4 +207,15 @@ window.addEventListener('DOMContentLoaded', () => {
     workspace.addListeners();
     workspace.createScene();
 });
+class BoundingBox {
+    constructor(x1, y1, x2, y2) {
+        this.x1 = x1,
+            this.y1 = y1,
+            this.x2 = x2,
+            this.y2 = y2;
+    }
+    toString() {
+        return `${this.x1}\t${this.y1}\t${this.x2}\t${this.y2}`;
+    }
+}
 //# sourceMappingURL=index.js.map
