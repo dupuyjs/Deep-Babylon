@@ -26,24 +26,43 @@ app.get('/', async (req, res) => {
     res.render('index', { title: 'Deep Babylon' });
 });
 /********* Settings  ***********/
-const IMAGE_HEIGHT = 855;
-const IMAGE_WIDTH = 1531;
-const BATCH_SIZE = 20;
+const IMAGE_HEIGHT = 1097;
+const IMAGE_WIDTH = 1922;
+const BATCH_SIZE = 40;
 const TRAININGDATA_PATH = './data';
-async function createBatch(dataPath, tagId, projectId) {
-    let tagIds = [tagId];
+function getDataLabels(dataPath) {
+    let labels = new Array();
+    let items = fs.readdirSync(dataPath);
+    for (let i = 0; i < items.length; i++) {
+        let fileName = items[i];
+        if (fileName.endsWith('.labels.tsv')) {
+            let labelPath = path.join(dataPath, fileName);
+            let label = fs.readFileSync(labelPath, { encoding: 'utf-8' }).toString();
+            if (!labels.includes(label)) {
+                labels.push(label);
+            }
+        }
+    }
+    return labels;
+}
+async function createBatch(dataPath, tags, projectId) {
+    let tagIds = Object.keys(tags).map(function (key) {
+        return tags[key];
+    });
     let items = fs.readdirSync(dataPath);
     let index = 0;
-    for (let i = 0; i < items.length / (BATCH_SIZE * 2); i++) {
+    for (let i = 0; i < items.length / (BATCH_SIZE * 3); i++) {
         let images = new Array();
-        for (let j = 0; j < (BATCH_SIZE * 2); j++) {
+        for (let j = 0; j < (BATCH_SIZE * 3); j++) {
             let fileName = items[index];
             if (path.extname(fileName) == '.png') {
                 let baseName = fileName.split('.')[0];
                 let imagePath = path.join(dataPath, fileName);
                 let bboxesPath = path.join(dataPath, baseName + '.bboxes.tsv');
+                let labelsPath = path.join(dataPath, baseName + '.bboxes.labels.tsv');
                 let imageBuffer = fs.readFileSync(imagePath);
                 let bboxText = fs.readFileSync(bboxesPath, { encoding: 'utf-8' }).toString();
+                let labelText = fs.readFileSync(labelsPath, { encoding: 'utf-8' }).toString();
                 let bbox = bboxText.split('\t');
                 let x1 = parseFloat(bbox[0]);
                 let y1 = parseFloat(bbox[1]);
@@ -54,62 +73,43 @@ async function createBatch(dataPath, tagId, projectId) {
                 let width = (x2 - x1) / IMAGE_WIDTH;
                 let height = (y2 - y1) / IMAGE_HEIGHT;
                 let regions = new Array();
-                regions.push(new region_1.Region(tagId, left, top, width, height));
-                images.push(new imageEntry_1.ImageEntry(baseName, imageBuffer.toJSON().data, tagIds, regions));
+                regions.push(new region_1.Region(tags[labelText], left, top, width, height));
+                images.push(new imageEntry_1.ImageEntry(baseName, imageBuffer.toJSON().data, null, regions));
                 console.log(`Image ${baseName} added.`);
             }
             index++;
             if (index == items.length)
                 break;
         }
-        let batch = new imageBatch_1.ImageBatch(images, tagIds);
+        let batch = new imageBatch_1.ImageBatch(images, null);
         await cognitive_customvision_1.default.createImagesFromFiles(projectId, batch);
-        console.log(`${index / 2} images sent.`);
+        console.log(`${index / 3} images sent.`);
     }
-    // for (let i = 0; i < items.length; i++) {
-    //     let images = new Array<ImageEntry>();
-    //     let fileName = items[i];
-    //     if (path.extname(fileName) == '.png') {
-    //         let baseName = fileName.split('.')[0];
-    //         let imagePath = path.join(dataPath, fileName);
-    //         let bboxesPath = path.join(dataPath, baseName + '.bboxes.tsv');
-    //         let imageBuffer = fs.readFileSync(imagePath);
-    //         let bboxText = fs.readFileSync(bboxesPath, { encoding: 'utf-8' }).toString();
-    //         let bbox = bboxText.split('\t');
-    //         let x1 = parseFloat(bbox[0]);
-    //         let y1 = parseFloat(bbox[1]);
-    //         let x2 = parseFloat(bbox[2]);
-    //         let y2 = parseFloat(bbox[3]);
-    //         let left = x1 / IMAGE_WIDTH;
-    //         let top = y1 / IMAGE_HEIGHT;
-    //         let width = (x2 - x1) / IMAGE_WIDTH;
-    //         let height = (y2 - y1) / IMAGE_HEIGHT;
-    //         let regions = new Array<Region>();
-    //         regions.push(new Region(tagId, left, top, width, height));
-    //         images.push(new ImageEntry(baseName, imageBuffer.toJSON().data, tagIds, regions))
-    //         console.log(`Image ${baseName} added.`);
-    //         let batch = new ImageBatch(images, tagIds);
-    //         customvision.createImagesFromFiles(projectId, batch);
-    //     }
-    // };
 }
 app.get('/training', async (req, res) => {
-    let tagName = "xbox joystick";
+    res.end('success');
+    let labels = getDataLabels(TRAININGDATA_PATH);
     let domain = await cognitive_customvision_1.default.getObjectDectionDomain();
     if (domain) {
         let project = await cognitive_customvision_1.default.createProject('Deep Babylon', domain.id);
         if (project) {
-            let tag = await cognitive_customvision_1.default.createImageTag(project.id, tagName);
-            if (tag) {
-                let batch = await createBatch(TRAININGDATA_PATH, tag.id, project.id);
-                //await customvision.createImagesFromFiles(project.id, batch);
+            let tags = {};
+            for (let label of labels) {
+                let tag = await cognitive_customvision_1.default.createImageTag(project.id, label);
+                if (tag) {
+                    tags[tag.name] = tag.id;
+                }
+            }
+            if (tags) {
+                let batch = await createBatch(TRAININGDATA_PATH, tags, project.id);
             }
         }
     }
 });
 app.post('/image', (req, res) => {
     let data = req.body.data;
-    let bbox = req.body.bbox;
+    let bboxes = req.body.bboxes;
+    let labels = req.body.labels;
     let imageBuffer = decodeBase64Image_1.decodeBase64Image(data);
     let guid = uuidv4_1.uuidv4();
     fs.writeFile(`./data/screenshot${guid}.png`, imageBuffer.data, (error) => {
@@ -122,7 +122,7 @@ app.post('/image', (req, res) => {
             console.log(`.png file written successfully`);
         }
     });
-    fs.writeFile(`./data/screenshot${guid}.bboxes.tsv`, bbox, (error) => {
+    fs.writeFile(`./data/screenshot${guid}.bboxes.tsv`, bboxes, (error) => {
         if (error) {
             // there was an error
             console.log('issue when writing file', error);
@@ -130,6 +130,16 @@ app.post('/image', (req, res) => {
         else {
             // data written successfully
             console.log(`.bboxes.tsv file written successfully`);
+        }
+    });
+    fs.writeFile(`./data/screenshot${guid}.bboxes.labels.tsv`, labels, (error) => {
+        if (error) {
+            // there was an error
+            console.log('issue when writing file', error);
+        }
+        else {
+            // data written successfully
+            console.log(`.bboxes.lebels.tsv file written successfully`);
         }
     });
     res.end('success');

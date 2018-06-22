@@ -5,8 +5,8 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
     }
 
     private _zoomStopsAnimation = false;
-    private _idleRotationAlphaSpeed = 0.05;
-    private _idleRotationBetaSpeed = 0.01;
+    private _idleRotationAlphaSpeed = 0.3;
+    private _idleRotationBetaSpeed = 0.1;
     private _idleRotationWaitTime = 2000;
     private _idleRotationSpinupTime = 2000;
 
@@ -19,6 +19,7 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
     private _lastInteractionTime = -Infinity;
     private _cameraRotationAlphaSpeed: number = 0;
     private _cameraRotationBetaSpeed: number = 0;
+    private _cameraRotationInitialRadius: number = 0;
     private _isBetaDirectionUp = true; 
 
     /**
@@ -91,6 +92,7 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
     public attach(camera: BABYLON.ArcRotateCamera): void {
         this._attachedCamera = camera;
         let scene = this._attachedCamera.getScene();
+        this._cameraRotationInitialRadius = this._attachedCamera.radius;
 
         this._onPrePointerObservableObserver = scene.onPrePointerObservable.add((pointerInfoPre) => {
             if (pointerInfoPre.type === BABYLON.PointerEventTypes.POINTERDOWN) {
@@ -122,20 +124,24 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
             // Step camera rotation by rotation speed
             if (this._attachedCamera) {
                 this._attachedCamera.alpha -= this._cameraRotationAlphaSpeed * (dt / 1000);
+
             
                 if (this._isBetaDirectionUp) {
                     this._attachedCamera.beta -= this._cameraRotationBetaSpeed * (dt / 1000);
+                    this._attachedCamera.radius += 0.01;
 
                     if (this._attachedCamera.beta < 0.1) {
-                        console.log('Down');
                         this._isBetaDirectionUp = false;
                     }
                 }
                 else {
                     this._attachedCamera.beta += this._cameraRotationBetaSpeed * (dt / 1000);
 
+                    if (this._attachedCamera.radius > this._cameraRotationInitialRadius) {
+                        this._attachedCamera.radius -= 0.01;
+                    }
+
                     if (this._attachedCamera.beta > (Math.PI -0.1)) {
-                        console.log('Up');
                         this._isBetaDirectionUp = true;
                     }
                     console.log(this._attachedCamera.beta);

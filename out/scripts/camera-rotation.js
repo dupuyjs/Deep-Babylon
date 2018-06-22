@@ -2,8 +2,8 @@
 class CustomCameraRotation {
     constructor() {
         this._zoomStopsAnimation = false;
-        this._idleRotationAlphaSpeed = 0.05;
-        this._idleRotationBetaSpeed = 0.01;
+        this._idleRotationAlphaSpeed = 0.3;
+        this._idleRotationBetaSpeed = 0.1;
         this._idleRotationWaitTime = 2000;
         this._idleRotationSpinupTime = 2000;
         // Default behavior functions
@@ -15,6 +15,7 @@ class CustomCameraRotation {
         this._lastInteractionTime = -Infinity;
         this._cameraRotationAlphaSpeed = 0;
         this._cameraRotationBetaSpeed = 0;
+        this._cameraRotationInitialRadius = 0;
         this._isBetaDirectionUp = true;
         this._lastFrameRadius = 0;
     }
@@ -81,6 +82,7 @@ class CustomCameraRotation {
     attach(camera) {
         this._attachedCamera = camera;
         let scene = this._attachedCamera.getScene();
+        this._cameraRotationInitialRadius = this._attachedCamera.radius;
         this._onPrePointerObservableObserver = scene.onPrePointerObservable.add((pointerInfoPre) => {
             if (pointerInfoPre.type === BABYLON.PointerEventTypes.POINTERDOWN) {
                 this._isPointerDown = true;
@@ -108,15 +110,17 @@ class CustomCameraRotation {
                 this._attachedCamera.alpha -= this._cameraRotationAlphaSpeed * (dt / 1000);
                 if (this._isBetaDirectionUp) {
                     this._attachedCamera.beta -= this._cameraRotationBetaSpeed * (dt / 1000);
+                    this._attachedCamera.radius += 0.01;
                     if (this._attachedCamera.beta < 0.1) {
-                        console.log('Down');
                         this._isBetaDirectionUp = false;
                     }
                 }
                 else {
                     this._attachedCamera.beta += this._cameraRotationBetaSpeed * (dt / 1000);
+                    if (this._attachedCamera.radius > this._cameraRotationInitialRadius) {
+                        this._attachedCamera.radius -= 0.01;
+                    }
                     if (this._attachedCamera.beta > (Math.PI - 0.1)) {
-                        console.log('Up');
                         this._isBetaDirectionUp = true;
                     }
                     console.log(this._attachedCamera.beta);

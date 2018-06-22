@@ -1,6 +1,6 @@
 "use strict";
 /// <reference path="camera-rotation.ts" />
-const MAX_IMAGES = 1000;
+const MAX_IMAGES = 2000;
 class WorkSpace {
     constructor(renderCanvas, layerCanvas) {
         this._isBoundingBox = true;
@@ -109,7 +109,8 @@ class WorkSpace {
                     method: "POST",
                     body: JSON.stringify({
                         'data': data,
-                        'bbox': bbox.toString()
+                        'bboxes': bbox.toString(),
+                        'labels': 'xbox controller'
                     })
                 }).then((data) => {
                     this._countCompletedImages += 1;
@@ -124,11 +125,11 @@ class WorkSpace {
             });
         }
     }
-    drawAIBoundingBox() {
-        if (this._xboxMesh) {
-            let positions = this._xboxMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+    getBoundingBox(mesh) {
+        if (mesh) {
+            let positions = mesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
             if (this._scene.activeCamera && this._scene.activeCamera.viewport && positions) {
-                let worlMatrix = this._xboxMesh.getWorldMatrix();
+                let worlMatrix = mesh.getWorldMatrix();
                 let transformMatrix = this._scene.getTransformMatrix();
                 let viewPort = this._scene.activeCamera.viewport;
                 let xCoordinates = [];
@@ -156,19 +157,50 @@ class WorkSpace {
                     x2 += MARGIN;
                 if (y2 < height - MARGIN)
                     y2 += MARGIN;
-                // Draw the 2D bounding box on the layer canvas
-                let context = this._layerCanvas.getContext('2d');
-                if (context) {
-                    if (this._isBoundingBox) {
-                        context.beginPath();
-                        context.rect(x1, y1, x2 - x1, y2 - y1);
-                        context.lineWidth = 1;
-                        context.strokeStyle = 'yellow';
-                        context.stroke();
-                    }
-                    else {
-                        context.clearRect(0, 0, this._layerCanvas.width, this._layerCanvas.height);
-                    }
+                return new BoundingBox(x1, y1, x2, y2);
+            }
+        }
+        return undefined;
+    }
+    drawAIBoundingBox() {
+        if (this._xboxMesh) {
+            let xCoordinates = [];
+            let yCoordinates = [];
+            let bbox = this.getBoundingBox(this._xboxMesh);
+            if (bbox) {
+                xCoordinates.push(bbox.x1);
+                xCoordinates.push(bbox.x2);
+                yCoordinates.push(bbox.y1);
+                yCoordinates.push(bbox.y2);
+            }
+            let childrens = this._xboxMesh.getChildMeshes(false);
+            for (let child of childrens) {
+                let bbox = this.getBoundingBox(child);
+                if (bbox) {
+                    console.log(bbox);
+                    xCoordinates.push(bbox.x1);
+                    xCoordinates.push(bbox.x2);
+                    yCoordinates.push(bbox.y1);
+                    yCoordinates.push(bbox.y2);
+                }
+            }
+            // Find min/max values
+            let x1 = Math.min.apply(null, xCoordinates);
+            let y1 = Math.min.apply(null, yCoordinates);
+            let x2 = Math.max.apply(null, xCoordinates);
+            let y2 = Math.max.apply(null, yCoordinates);
+            // Draw the 2D bounding box on the layer canvas
+            let context = this._layerCanvas.getContext('2d');
+            if (context) {
+                if (this._isBoundingBox) {
+                    context.beginPath();
+                    context.rect(x1, y1, x2 - x1, y2 - y1);
+                    context.lineWidth = 1;
+                    context.strokeStyle = 'yellow';
+                    context.stroke();
+                }
+                else {
+                    context.clearRect(0, 0, this._layerCanvas.width, this._layerCanvas.height);
                 }
                 return new BoundingBox(x1, y1, x2, y2);
             }
@@ -177,11 +209,12 @@ class WorkSpace {
     }
     sceneLoaded(scene) {
         this._scene = scene;
-        this._xboxMesh = this._scene.getMeshByName('node_id29');
+        //this._xboxMesh = <BABYLON.Mesh>this._scene.getMeshByName('node_id29');
+        this._xboxMesh = this._scene.meshes[0];
         this.initCameraAndLight(scene.meshes);
     }
     createScene() {
-        BABYLON.SceneLoader.LoadAsync("./", "xboxcontroller.glb", this._engine).then((scene) => {
+        BABYLON.SceneLoader.LoadAsync("./", "xbox_one_controller.glb", this._engine).then((scene) => {
             this.sceneLoaded(scene);
             scene.whenReadyAsync().then(() => {
                 this._engine.runRenderLoop(() => {
