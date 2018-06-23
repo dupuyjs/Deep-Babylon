@@ -1,3 +1,8 @@
+/**
+* Decode an image from a base64 string.
+* @function decodeBase64Image
+* @param {string} dataString - base64 string.
+*/
 export function decodeBase64Image(dataString: string) {
     let matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     let response: any = {};

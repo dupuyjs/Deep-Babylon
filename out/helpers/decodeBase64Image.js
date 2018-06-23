@@ -1,5 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+/**
+* Decode an image from a base64 string.
+* @function decodeBase64Image
+* @param {string} dataString - base64 string.
+*/
 function decodeBase64Image(dataString) {
     let matches = dataString.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     let response = {};
