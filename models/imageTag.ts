@@ -1,3 +1,6 @@
+/**
+ * @interface ImageTag
+ */
 interface ImageTag {
     id: string,
     name: string,

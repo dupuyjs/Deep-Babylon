@@ -1,1 +1,1 @@
-{"version":3,"file":"imageBatch.js","sourceRoot":"","sources":["../../models/imageBatch.ts"],"names":[],"mappings":";;AAEA;IAII,YAAY,MAAoB,EAAE,MAAuB;QACrD,IAAI,CAAC,MAAM,GAAG,MAAM,CAAC;QACrB,IAAI,CAAC,MAAM,GAAG,MAAM,CAAC;IACzB,CAAC;CACJ;AARD,gCAQC"}
+{"version":3,"file":"imageBatch.js","sourceRoot":"","sources":["../../models/imageBatch.ts"],"names":[],"mappings":";;AAEA;;;GAGG;AACH;IAII;;;;MAIE;IACF,YAAY,MAAoB,EAAE,MAAuB;QACrD,IAAI,CAAC,MAAM,GAAG,MAAM,CAAC;QACrB,IAAI,CAAC,MAAM,GAAG,MAAM,CAAC;IACzB,CAAC;CACJ;AAbD,gCAaC"}

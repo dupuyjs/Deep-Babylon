@@ -1,3 +1,6 @@
+/** 
+ * @interface Project
+ */
 interface Project {
     id: string;
     name: string;

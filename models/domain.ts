@@ -1,3 +1,6 @@
+/** 
+ * @interface Domain
+ */
 interface Domain {
     id: string;
     name: string;
