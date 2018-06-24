@@ -1,6 +1,5 @@
 /// <reference path="camera-rotation.ts" />
-
-const MAX_IMAGES = 300;
+/// <reference path="client-settings.ts" />
 
 class WorkSpace {
 
@@ -132,7 +131,8 @@ class WorkSpace {
     }
 
     uploadScreenshot(bbox: BoundingBox): void {
-        if (this._scene.activeCamera && (this._countPendingImages < MAX_IMAGES)) {
+        console.log(ClientSettings.MAX_IMAGES);
+        if (this._scene.activeCamera && (this._countPendingImages < ClientSettings.MAX_IMAGES)) {
 
             this._countPendingImages += 1;
 
@@ -153,7 +153,7 @@ class WorkSpace {
                         this._countCompletedImages += 1;
                         console.log('upload succeded', data);
 
-                        if (this._countCompletedImages == MAX_IMAGES) {
+                        if (this._countCompletedImages == ClientSettings.MAX_IMAGES) {
                             this.triggerTraining();
                         }
                     })
@@ -231,7 +231,7 @@ class WorkSpace {
                 let bbox = this.getBoundingBox(child as BABYLON.Mesh);
   
                 if (bbox) {
-                    console.log(bbox);
+                    //console.log(bbox);
                     xCoordinates.push(bbox.x1);
                     xCoordinates.push(bbox.x2);
                     yCoordinates.push(bbox.y1);

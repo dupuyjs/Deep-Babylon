@@ -1,6 +1,6 @@
 "use strict";
 /// <reference path="camera-rotation.ts" />
-const MAX_IMAGES = 2000;
+/// <reference path="client-settings.ts" />
 class WorkSpace {
     constructor(renderCanvas, layerCanvas) {
         this._isBoundingBox = true;
@@ -98,7 +98,8 @@ class WorkSpace {
         console.log('triggered');
     }
     uploadScreenshot(bbox) {
-        if (this._scene.activeCamera && (this._countPendingImages < MAX_IMAGES)) {
+        console.log(ClientSettings.MAX_IMAGES);
+        if (this._scene.activeCamera && (this._countPendingImages < ClientSettings.MAX_IMAGES)) {
             this._countPendingImages += 1;
             BABYLON.Tools.CreateScreenshot(this._engine, this._scene.activeCamera, { precision: 1 }, (data) => {
                 fetch('http://localhost:8081/image', {
@@ -115,7 +116,7 @@ class WorkSpace {
                 }).then((data) => {
                     this._countCompletedImages += 1;
                     console.log('upload succeded', data);
-                    if (this._countCompletedImages == MAX_IMAGES) {
+                    if (this._countCompletedImages == ClientSettings.MAX_IMAGES) {
                         this.triggerTraining();
                     }
                 })
@@ -177,7 +178,7 @@ class WorkSpace {
             for (let child of childrens) {
                 let bbox = this.getBoundingBox(child);
                 if (bbox) {
-                    console.log(bbox);
+                    //console.log(bbox);
                     xCoordinates.push(bbox.x1);
                     xCoordinates.push(bbox.x2);
                     yCoordinates.push(bbox.y1);
