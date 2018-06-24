@@ -3,15 +3,17 @@ import * as loaders from 'babylonjs-loaders';
 import * as materials from 'babylonjs-materials';
 
 import * as fs from 'fs';
+import * as gm from 'gm';
 import * as path from 'path';
 import * as bodyParser from 'body-parser';
 
-import customvision from './cognitive-customvision';
+import customvision from './services/cognitive-customvision';
 import { decodeBase64Image } from './helpers/decodeBase64Image'
 import { uuidv4 } from './helpers/uuidv4'
 import { Region } from './models/region';
 import { ImageBatch } from './models/imageBatch';
 import { ImageEntry } from './models/imageEntry';
+import { ServerSettings } from './server-settings'
 
 // Loading environment variables
 const dotenv = require('dotenv').config();
@@ -36,12 +38,12 @@ app.get('/', async (req: any, res: any) => {
     res.render('index', { title: 'Deep Babylon' });
 });
 
-/********* Settings  ***********/
-const IMAGE_HEIGHT = 1097;
-const IMAGE_WIDTH = 1922;
-const BATCH_SIZE = 40;
-const TRAININGDATA_PATH = './data';
 
+/**
+* Parse all .labels.tsv files to get unique labels
+* @param {string} dataPath - The data folder path.
+* @return {Array<string>} Returns a list of labels.
+*/
 function getDataLabels(dataPath: string): Array<string> {
 
     let labels = new Array<string>();
@@ -61,19 +63,25 @@ function getDataLabels(dataPath: string): Array<string> {
     return labels;
 }
 
+/**
+* Parse all files in data folder path and send ImageBatch to Custom Vision service.
+* @param {string} dataPath - The data folder path.
+* @param {any} tags - List of tags.
+* @param {string} projectId - The project id value.
+*/
 async function createBatch(dataPath: string, tags: any, projectId: string): Promise<void> {
 
-    let tagIds = Object.keys(tags).map(function(key){
+    let tagIds = Object.keys(tags).map(function (key) {
         return tags[key];
     });
 
     let items = fs.readdirSync(dataPath);
 
     let index = 0;
-    for (let i = 0; i < items.length / (BATCH_SIZE * 3); i++) {
+    for (let i = 0; i < items.length / (ServerSettings.BATCH_SIZE * 3); i++) {
         let images = new Array<ImageEntry>();
 
-        for (let j = 0; j < (BATCH_SIZE * 3); j++) {
+        for (let j = 0; j < (ServerSettings.BATCH_SIZE * 3); j++) {
             let fileName = items[index];
 
             if (path.extname(fileName) == '.png') {
@@ -93,10 +101,20 @@ async function createBatch(dataPath: string, tags: any, projectId: string): Prom
                 let x2 = parseFloat(bbox[2]);
                 let y2 = parseFloat(bbox[3]);
 
-                let left = x1 / IMAGE_WIDTH;
-                let top = y1 / IMAGE_HEIGHT;
-                let width = (x2 - x1) / IMAGE_WIDTH;
-                let height = (y2 - y1) / IMAGE_HEIGHT;
+                let imageHeight = 0;
+                let imageWidth = 0;
+                gm(imagePath)
+                    .size(function (err, size) {
+                        if (!err) {
+                            imageHeight = size.height;
+                            imageWidth = size.width;
+                        }
+                    });
+
+                let left = x1 / imageWidth;
+                let top = y1 / imageHeight;
+                let width = (x2 - x1) / imageWidth;
+                let height = (y2 - y1) / imageHeight;
 
                 let regions = new Array<Region>();
                 regions.push(new Region(tags[labelText], left, top, width, height));
@@ -110,25 +128,26 @@ async function createBatch(dataPath: string, tags: any, projectId: string): Prom
         }
 
         let batch = new ImageBatch(images, null);
-        await customvision.createImagesFromFiles(projectId, batch);
+        await customvision.createImagesFromFilesAsync(projectId, batch);
         console.log(`${index / 3} images sent.`);
     }
 }
 
+// GET API endpoint to start the training
 app.get('/training', async (req: any, res: any) => {
 
     res.end('success');
-    
-    let labels = getDataLabels(TRAININGDATA_PATH);
-    let domain = await customvision.getObjectDectionDomain();
+
+    let labels = getDataLabels(ServerSettings.TRAININGDATA_PATH);
+    let domain = await customvision.getObjectDetectionDomainAsync();
 
     if (domain) {
-        let project = await customvision.createProject('Deep Babylon', domain.id);
+        let project = await customvision.createProjectAsync(ServerSettings.PROJECT_NAME, domain.id);
 
         if (project) {
             let tags: any = {};
             for (let label of labels) {
-                let tag = await customvision.createImageTag(project.id, label);
+                let tag = await customvision.createImageTagAsync(project.id, label);
 
                 if (tag) {
                     tags[tag.name] = tag.id;
@@ -136,12 +155,13 @@ app.get('/training', async (req: any, res: any) => {
             }
 
             if (tags) {
-                let batch = await createBatch(TRAININGDATA_PATH, tags, project.id);
+                let batch = await createBatch(ServerSettings.TRAININGDATA_PATH, tags, project.id);
             }
         }
     }
 });
 
+// POST API endpoint to receive base64 string and save images locally with associated bounding box and labels
 app.post('/image', (req: any, res: any) => {
     let data: string = req.body.data;
     let bboxes = req.body.bboxes;
@@ -149,6 +169,16 @@ app.post('/image', (req: any, res: any) => {
 
     let imageBuffer = decodeBase64Image(data);
     let guid = uuidv4();
+
+    const mkdirSync = function (dirPath: string) {
+        try {
+            fs.mkdirSync(dirPath)
+        } catch (err) {
+            if (err.code !== 'EEXIST') throw err
+        }
+    }
+
+    mkdirSync(path.resolve(ServerSettings.TRAININGDATA_PATH))
 
     fs.writeFile(`./data/screenshot${guid}.png`, imageBuffer.data, (error) => {
         if (error) {
@@ -184,8 +214,8 @@ app.post('/image', (req: any, res: any) => {
 })
 
 // bind to a port
-app.listen(process.env.port || process.env.PORT || 8081, () => {
-    console.log('server started');
+let server = app.listen(process.env.port || process.env.PORT || 8081, () => {
+    console.log(`server started on http://${server.address().address}:${server.address().port}`);
 });
 
 

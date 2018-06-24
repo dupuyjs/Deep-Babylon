@@ -1,14 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const fs = require("fs");
+const gm = require("gm");
 const path = require("path");
 const bodyParser = require("body-parser");
-const cognitive_customvision_1 = require("./cognitive-customvision");
+const cognitive_customvision_1 = require("./services/cognitive-customvision");
 const decodeBase64Image_1 = require("./helpers/decodeBase64Image");
 const uuidv4_1 = require("./helpers/uuidv4");
 const region_1 = require("./models/region");
 const imageBatch_1 = require("./models/imageBatch");
 const imageEntry_1 = require("./models/imageEntry");
+const server_settings_1 = require("./server-settings");
 // Loading environment variables
 const dotenv = require('dotenv').config();
 // Include Express
@@ -25,11 +27,11 @@ app.use(express.static(path.join(__dirname, 'assets')));
 app.get('/', async (req, res) => {
     res.render('index', { title: 'Deep Babylon' });
 });
-/********* Settings  ***********/
-const IMAGE_HEIGHT = 1097;
-const IMAGE_WIDTH = 1922;
-const BATCH_SIZE = 40;
-const TRAININGDATA_PATH = './data';
+/**
+* Parse all .labels.tsv files to get unique labels
+* @param {string} dataPath - The data folder path.
+* @return {Array<string>} Returns a list of labels.
+*/
 function getDataLabels(dataPath) {
     let labels = new Array();
     let items = fs.readdirSync(dataPath);
@@ -45,15 +47,21 @@ function getDataLabels(dataPath) {
     }
     return labels;
 }
+/**
+* Parse all files in data folder path and send ImageBatch to Custom Vision service.
+* @param {string} dataPath - The data folder path.
+* @param {any} tags - List of tags.
+* @param {string} projectId - The project id value.
+*/
 async function createBatch(dataPath, tags, projectId) {
     let tagIds = Object.keys(tags).map(function (key) {
         return tags[key];
     });
     let items = fs.readdirSync(dataPath);
     let index = 0;
-    for (let i = 0; i < items.length / (BATCH_SIZE * 3); i++) {
+    for (let i = 0; i < items.length / (server_settings_1.ServerSettings.BATCH_SIZE * 3); i++) {
         let images = new Array();
-        for (let j = 0; j < (BATCH_SIZE * 3); j++) {
+        for (let j = 0; j < (server_settings_1.ServerSettings.BATCH_SIZE * 3); j++) {
             let fileName = items[index];
             if (path.extname(fileName) == '.png') {
                 let baseName = fileName.split('.')[0];
@@ -68,10 +76,19 @@ async function createBatch(dataPath, tags, projectId) {
                 let y1 = parseFloat(bbox[1]);
                 let x2 = parseFloat(bbox[2]);
                 let y2 = parseFloat(bbox[3]);
-                let left = x1 / IMAGE_WIDTH;
-                let top = y1 / IMAGE_HEIGHT;
-                let width = (x2 - x1) / IMAGE_WIDTH;
-                let height = (y2 - y1) / IMAGE_HEIGHT;
+                let imageHeight = 0;
+                let imageWidth = 0;
+                gm(imagePath)
+                    .size(function (err, size) {
+                    if (!err) {
+                        imageHeight = size.height;
+                        imageWidth = size.width;
+                    }
+                });
+                let left = x1 / imageWidth;
+                let top = y1 / imageHeight;
+                let width = (x2 - x1) / imageWidth;
+                let height = (y2 - y1) / imageHeight;
                 let regions = new Array();
                 regions.push(new region_1.Region(tags[labelText], left, top, width, height));
                 images.push(new imageEntry_1.ImageEntry(baseName, imageBuffer.toJSON().data, null, regions));
@@ -82,36 +99,48 @@ async function createBatch(dataPath, tags, projectId) {
                 break;
         }
         let batch = new imageBatch_1.ImageBatch(images, null);
-        await cognitive_customvision_1.default.createImagesFromFiles(projectId, batch);
+        await cognitive_customvision_1.default.createImagesFromFilesAsync(projectId, batch);
         console.log(`${index / 3} images sent.`);
     }
 }
+// GET API endpoint to start the training
 app.get('/training', async (req, res) => {
     res.end('success');
-    let labels = getDataLabels(TRAININGDATA_PATH);
-    let domain = await cognitive_customvision_1.default.getObjectDectionDomain();
+    let labels = getDataLabels(server_settings_1.ServerSettings.TRAININGDATA_PATH);
+    let domain = await cognitive_customvision_1.default.getObjectDetectionDomainAsync();
     if (domain) {
-        let project = await cognitive_customvision_1.default.createProject('Deep Babylon', domain.id);
+        let project = await cognitive_customvision_1.default.createProjectAsync(server_settings_1.ServerSettings.PROJECT_NAME, domain.id);
         if (project) {
             let tags = {};
             for (let label of labels) {
-                let tag = await cognitive_customvision_1.default.createImageTag(project.id, label);
+                let tag = await cognitive_customvision_1.default.createImageTagAsync(project.id, label);
                 if (tag) {
                     tags[tag.name] = tag.id;
                 }
             }
             if (tags) {
-                let batch = await createBatch(TRAININGDATA_PATH, tags, project.id);
+                let batch = await createBatch(server_settings_1.ServerSettings.TRAININGDATA_PATH, tags, project.id);
             }
         }
     }
 });
+// POST API endpoint to receive base64 string and save images locally with associated bounding box and labels
 app.post('/image', (req, res) => {
     let data = req.body.data;
     let bboxes = req.body.bboxes;
     let labels = req.body.labels;
     let imageBuffer = decodeBase64Image_1.decodeBase64Image(data);
     let guid = uuidv4_1.uuidv4();
+    const mkdirSync = function (dirPath) {
+        try {
+            fs.mkdirSync(dirPath);
+        }
+        catch (err) {
+            if (err.code !== 'EEXIST')
+                throw err;
+        }
+    };
+    mkdirSync(path.resolve(server_settings_1.ServerSettings.TRAININGDATA_PATH));
     fs.writeFile(`./data/screenshot${guid}.png`, imageBuffer.data, (error) => {
         if (error) {
             // there was an error
@@ -145,7 +174,7 @@ app.post('/image', (req, res) => {
     res.end('success');
 });
 // bind to a port
-app.listen(process.env.port || process.env.PORT || 8081, () => {
-    console.log('server started');
+let server = app.listen(process.env.port || process.env.PORT || 8081, () => {
+    console.log(`server started on http://${server.address().address}:${server.address().port}`);
 });
 //# sourceMappingURL=app.js.map
