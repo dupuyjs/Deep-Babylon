@@ -4,8 +4,11 @@ import * as materials from 'babylonjs-materials';
 
 import * as fs from 'fs';
 import * as gm from 'gm';
+import * as pngToJpeg from 'png-to-jpeg';
 import * as path from 'path';
 import * as bodyParser from 'body-parser';
+import * as xmlbuilder from 'xmlbuilder';
+import * as xml2js from 'xml2js';
 
 import customvision from './services/cognitive-customvision';
 import { decodeBase64Image } from './helpers/decodeBase64Image'
@@ -57,6 +60,39 @@ function getDataLabels(dataPath: string): Array<string> {
             if (!labels.includes(label)) {
                 labels.push(label);
             }
+        }
+    }
+
+    return labels;
+}
+
+/**
+* Parse all .labels.tsv files to get unique labels
+* @param {string} dataPath - The data folder path.
+* @return {Array<string>} Returns a list of labels.
+*/
+function getDataLabelsFromXml(dataPath: string): any {
+
+    //let labels = new Array<string>();
+    let id = 1;
+    let labels = {}
+    let items = fs.readdirSync(dataPath);
+    for (let i = 0; i < items.length; i++) {
+        let fileName = items[i];
+        if (fileName.endsWith('.xml')) {
+            let xmlPath = path.join(dataPath, fileName);
+            let xml = fs.readFileSync(xmlPath, { encoding: 'utf-8' }).toString();
+
+            xml2js.parseString(xml, (err, result) => {
+                let label = result.annotation.object[0].name[0];
+                if (!(label in labels)) {
+                    labels[label] = { id: id, total: 1, count: 0 };
+                    id += 1;
+                }
+                else {
+                    labels[label].total += 1;
+                }
+            });
         }
     }
 
@@ -133,7 +169,7 @@ async function createBatch(dataPath: string, tags: any, projectId: string): Prom
     }
 }
 
-// GET API endpoint to start the training
+// GET API endpoint to start the training with customvision.ai
 app.get('/training', async (req: any, res: any) => {
 
     res.end('success');
@@ -161,11 +197,65 @@ app.get('/training', async (req: any, res: any) => {
     }
 });
 
+// Complete the dataset information for pascal voc format
+app.get('/tensorflow', async (req: any, res: any) => {
+
+    res.end('success');
+
+    let mainPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'ImageSets', 'Main');
+    let dataPath = path.resolve(ServerSettings.TRAININGDATA_PATH, 'Annotations');
+
+    const mkdirSync = function (dirPath: string) {
+        try {
+            fs.mkdirSync(dirPath)
+        } catch (err) {
+            if (err.code !== 'EEXIST') throw err
+        }
+    }
+
+    mkdirSync(mainPath);
+
+    let labels = getDataLabelsFromXml(dataPath);
+
+    for (let label in labels) {
+
+        //let item = `item {\n\r  id: ${index}\n\r  name:'${label}'\n}`;
+        let item = `item {\r\n  id: ${labels[label].id}\r\n  name:'${label}'\r\n}\r\n\r\n`;
+        fs.appendFileSync(path.resolve(ServerSettings.TRAININGDATA_PATH, "pascal_label_map.pbtxt"), item);
+    }
+
+    let items = fs.readdirSync(dataPath);
+    for (let i = 0; i < items.length; i++) {
+        let fileName = items[i];
+        if (fileName.endsWith('.xml')) {
+            let xmlPath = path.join(dataPath, fileName);
+            let xml = fs.readFileSync(xmlPath, { encoding: 'utf-8' }).toString();
+
+            xml2js.parseString(xml, (err, result) => {
+                let label = result.annotation.object[0].name[0];
+                let filename = result.annotation.filename;
+                let content = `${filename} ${labels[label].id}\r\n`
+
+                if (labels[label].count < (labels[label].total * 0.8)) {
+                    fs.appendFileSync(path.resolve(ServerSettings.TRAININGDATA_PATH, "ImageSets", "Main", "test_train.txt"), content);
+                }
+                else {
+                    fs.appendFileSync(path.resolve(ServerSettings.TRAININGDATA_PATH, "ImageSets", "Main", "test_val.txt"), content)
+                }
+
+                labels[label].count += 1;
+            });
+        }
+    }
+});
+
 // POST API endpoint to receive base64 string and save images locally with associated bounding box and labels
 app.post('/image', (req: any, res: any) => {
     let data: string = req.body.data;
     let bboxes = req.body.bboxes;
     let labels = req.body.labels;
+    let width = req.body.width;
+    let height = req.body.height;
 
     let imageBuffer = decodeBase64Image(data);
     let guid = uuidv4();
@@ -180,38 +270,155 @@ app.post('/image', (req: any, res: any) => {
 
     mkdirSync(path.resolve(ServerSettings.TRAININGDATA_PATH))
 
-    fs.writeFile(`./data/screenshot${guid}.png`, imageBuffer.data, (error) => {
-        if (error) {
-            // there was an error
-            console.log('issue when writing .png file', error);
-        } else {
-            // data written successfully
-            console.log(`.png file written successfully`);
+    // **** CNTK FORMAT ****
+    // fs.writeFile(`./data/screenshot${guid}.png`, imageBuffer.data, (error) => {
+    //     if (error) {
+    //         // there was an error
+    //         console.log('issue when writing .png file', error);
+    //     } else {
+    //         // data written successfully
+    //         console.log(`.png file written successfully`);
+    //     }
+    // });
+
+    // fs.writeFile(`./data/screenshot${guid}.bboxes.tsv`, bboxes, (error) => {
+    //     if (error) {
+    //         // there was an error
+    //         console.log('issue when writing file', error);
+    //     } else {
+    //         // data written successfully
+    //         console.log(`.bboxes.tsv file written successfully`);
+    //     }
+    // });
+
+    // fs.writeFile(`./data/screenshot${guid}.bboxes.labels.tsv`, labels, (error) => {
+    //     if (error) {
+    //         // there was an error
+    //         console.log('issue when writing file', error);
+    //     } else {
+    //         // data written successfully
+    //         console.log(`.bboxes.lebels.tsv file written successfully`);
+    //     }
+    // });
+    // **** CNTK FORMAT ****
+
+    // **** TENSORFLOW PASCAL VOC ****
+
+    let annotationsPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'Annotations');
+    let setsPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'ImageSets');
+    let jpegPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'JPEGImages');
+
+    mkdirSync(annotationsPath);
+    mkdirSync(setsPath);
+    mkdirSync(jpegPath);
+
+    // fs.writeFile(path.resolve(jpegPath, `screenshot${guid}.png`), imageBuffer.data, (error) => {
+    //     if (error) {
+    //         // there was an error
+    //         console.log('issue when writing .png file', error);
+    //     } else {
+    //         // data written successfully
+    //         console.log(`.png file written successfully`);
+    //     }
+    // });
+
+    pngToJpeg({ quality: 100 })(imageBuffer.data).then((buffer) => {
+
+        fs.writeFile(path.resolve(jpegPath, `screenshot${guid}.jpeg`), buffer, (error) => {
+            if (error) {
+                // there was an error
+                console.log('issue when writing .jpeg file', error);
+            } else {
+                // data written successfully
+                console.log(`.jpeg file written successfully`);
+            }
+        });
+
+    });
+
+    let bbox = bboxes.split('\t');
+
+    let xmin = Math.floor(parseFloat(bbox[0]));
+    let ymin = Math.floor(parseFloat(bbox[1]));
+    let xmax = Math.floor(parseFloat(bbox[2]));
+    let ymax = Math.floor(parseFloat(bbox[3]));
+
+    let xml = xmlbuilder.create({
+        annotation: {
+            '@verified': 'yes',
+            folder: {
+                '#text': 'Annotations'
+            },
+            filename: {
+                '#text': `screenshot${guid}.jpeg`
+            },
+            path: {
+                '#text': path.resolve(jpegPath, `screenshot${guid}.jpeg`)
+            },
+            source: {
+                database: {
+                    '#text': 'Unknown'
+                }
+            },
+            size: {
+                width: {
+                    '#text': width
+                },
+                height: {
+                    '#text': height
+                },
+                depth: {
+                    '#text': '3'
+                },
+            },
+            segmented: {
+                '#text': '0'
+            },
+            object: {
+                name: {
+                    '#text': `${labels}`
+                },
+                pose: {
+                    '#text': 'Unspecified'
+                },
+                truncated: {
+                    '#text': '0'
+                },
+                difficult: {
+                    '#text': '0'
+                },
+                bndbox: {
+                    xmin: {
+                        '#text': xmin
+                    },
+                    ymin: {
+                        '#text': ymin
+                    },
+                    xmax: {
+                        '#text': xmax
+                    },
+                    ymax: {
+                        '#text': ymax
+                    }
+                }
+            }
         }
     });
 
-    fs.writeFile(`./data/screenshot${guid}.bboxes.tsv`, bboxes, (error) => {
+    fs.writeFile(path.resolve(annotationsPath, `screenshot${guid}.xml`), xml, (error) => {
         if (error) {
             // there was an error
-            console.log('issue when writing file', error);
+            console.log('issue when writing .xml file', error);
         } else {
             // data written successfully
-            console.log(`.bboxes.tsv file written successfully`);
+            console.log(`.xml file written successfully`);
         }
     });
 
-    fs.writeFile(`./data/screenshot${guid}.bboxes.labels.tsv`, labels, (error) => {
-        if (error) {
-            // there was an error
-            console.log('issue when writing file', error);
-        } else {
-            // data written successfully
-            console.log(`.bboxes.lebels.tsv file written successfully`);
-        }
-    });
+    // **** TENSORFLOW PASCAL VOC ****
 
     res.end('success');
-})
+});
 
 // bind to a port
 let server = app.listen(process.env.port || process.env.PORT || 8081, () => {

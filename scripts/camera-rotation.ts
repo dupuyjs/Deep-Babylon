@@ -128,7 +128,7 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
             
                 if (this._isBetaDirectionUp) {
                     this._attachedCamera.beta -= this._cameraRotationBetaSpeed * (dt / 1000);
-                    this._attachedCamera.radius += 0.01;
+                    //this._attachedCamera.radius += 0.01;
 
                     if (this._attachedCamera.beta < 0.1) {
                         this._isBetaDirectionUp = false;
@@ -138,7 +138,7 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
                     this._attachedCamera.beta += this._cameraRotationBetaSpeed * (dt / 1000);
 
                     if (this._attachedCamera.radius > this._cameraRotationInitialRadius) {
-                        this._attachedCamera.radius -= 0.01;
+                        //this._attachedCamera.radius -= 0.01;
                     }
 
                     if (this._attachedCamera.beta > (Math.PI -0.1)) {
