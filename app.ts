@@ -4,7 +4,7 @@ import * as materials from 'babylonjs-materials';
 
 import * as fs from 'fs';
 import * as gm from 'gm';
-import * as pngToJpeg from 'png-to-jpeg';
+import * as sharp from 'sharp';
 import * as path from 'path';
 import * as bodyParser from 'body-parser';
 import * as xmlbuilder from 'xmlbuilder';
@@ -41,6 +41,14 @@ app.get('/', async (req: any, res: any) => {
     res.render('index', { title: 'Deep Babylon' });
 });
 
+
+const mkdirSync = function (dirPath: string) {
+    try {
+        fs.mkdirSync(dirPath)
+    } catch (err) {
+        if (err.code !== 'EEXIST') throw err
+    }
+}
 
 /**
 * Parse all .labels.tsv files to get unique labels
@@ -205,14 +213,6 @@ app.get('/tensorflow', async (req: any, res: any) => {
     let mainPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'ImageSets', 'Main');
     let dataPath = path.resolve(ServerSettings.TRAININGDATA_PATH, 'Annotations');
 
-    const mkdirSync = function (dirPath: string) {
-        try {
-            fs.mkdirSync(dirPath)
-        } catch (err) {
-            if (err.code !== 'EEXIST') throw err
-        }
-    }
-
     mkdirSync(mainPath);
 
     let labels = getDataLabelsFromXml(dataPath);
@@ -249,82 +249,34 @@ app.get('/tensorflow', async (req: any, res: any) => {
     }
 });
 
+
 // POST API endpoint to receive base64 string and save images locally with associated bounding box and labels
 app.post('/image', (req: any, res: any) => {
-    let data: string = req.body.data;
-    let bboxes = req.body.bboxes;
-    let labels = req.body.labels;
-    let width = req.body.width;
-    let height = req.body.height;
 
+    // Get data and bounding boxes from request body
+    let data: string = req.body.data;
+    let bboxes = JSON.parse(req.body.bboxes);
+
+    // Extracting image buffer from data (.png)
     let imageBuffer = decodeBase64Image(data);
+
+    // Initializing unique identifier
     let guid = uuidv4();
 
-    const mkdirSync = function (dirPath: string) {
-        try {
-            fs.mkdirSync(dirPath)
-        } catch (err) {
-            if (err.code !== 'EEXIST') throw err
-        }
-    }
-
-    mkdirSync(path.resolve(ServerSettings.TRAININGDATA_PATH))
-
-    // **** CNTK FORMAT ****
-    // fs.writeFile(`./data/screenshot${guid}.png`, imageBuffer.data, (error) => {
-    //     if (error) {
-    //         // there was an error
-    //         console.log('issue when writing .png file', error);
-    //     } else {
-    //         // data written successfully
-    //         console.log(`.png file written successfully`);
-    //     }
-    // });
-
-    // fs.writeFile(`./data/screenshot${guid}.bboxes.tsv`, bboxes, (error) => {
-    //     if (error) {
-    //         // there was an error
-    //         console.log('issue when writing file', error);
-    //     } else {
-    //         // data written successfully
-    //         console.log(`.bboxes.tsv file written successfully`);
-    //     }
-    // });
-
-    // fs.writeFile(`./data/screenshot${guid}.bboxes.labels.tsv`, labels, (error) => {
-    //     if (error) {
-    //         // there was an error
-    //         console.log('issue when writing file', error);
-    //     } else {
-    //         // data written successfully
-    //         console.log(`.bboxes.lebels.tsv file written successfully`);
-    //     }
-    // });
-    // **** CNTK FORMAT ****
-
-    // **** TENSORFLOW PASCAL VOC ****
-
+    // Ensure directories are all set correctly (TENSORFLOW PASCAL VOC)
     let annotationsPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'Annotations');
     let setsPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'ImageSets');
     let jpegPath: string = path.resolve(ServerSettings.TRAININGDATA_PATH, 'JPEGImages');
 
+    mkdirSync(path.resolve(ServerSettings.TRAININGDATA_PATH))
     mkdirSync(annotationsPath);
     mkdirSync(setsPath);
     mkdirSync(jpegPath);
 
-    // fs.writeFile(path.resolve(jpegPath, `screenshot${guid}.png`), imageBuffer.data, (error) => {
-    //     if (error) {
-    //         // there was an error
-    //         console.log('issue when writing .png file', error);
-    //     } else {
-    //         // data written successfully
-    //         console.log(`.png file written successfully`);
-    //     }
-    // });
-
-    pngToJpeg({ quality: 100 })(imageBuffer.data).then((buffer) => {
-
-        fs.writeFile(path.resolve(jpegPath, `screenshot${guid}.jpeg`), buffer, (error) => {
+    // Converting image to jpeg and saving on disk
+    sharp(imageBuffer.data)
+        .jpeg({quality:100, chromaSubsampling: '4:4:4'})
+        .toFile(path.resolve(jpegPath, `screenshot${guid}.jpeg`), (error, info) => {
             if (error) {
                 // there was an error
                 console.log('issue when writing .jpeg file', error);
@@ -332,16 +284,43 @@ app.post('/image', (req: any, res: any) => {
                 // data written successfully
                 console.log(`.jpeg file written successfully`);
             }
-        });
+        })
 
-    });
+    // Annotation xml file
+    let objects = [];
+    for(let bbox of bboxes) {
 
-    let bbox = bboxes.split('\t');
+        let object = {
+            name: {
+                '#text': bbox.name
+            },
+            pose: {
+                '#text': 'Unspecified'
+            },
+            truncated: {
+                '#text': '0'
+            },
+            difficult: {
+                '#text': '0'
+            },
+            bndbox: {
+                xmin: {
+                    '#text': bbox.x1
+                },
+                ymin: {
+                    '#text': bbox.y1
+                },
+                xmax: {
+                    '#text': bbox.x2
+                },
+                ymax: {
+                    '#text': bbox.y2
+                }
+            }
+        }
 
-    let xmin = Math.floor(parseFloat(bbox[0]));
-    let ymin = Math.floor(parseFloat(bbox[1]));
-    let xmax = Math.floor(parseFloat(bbox[2]));
-    let ymax = Math.floor(parseFloat(bbox[3]));
+        objects.push(object);
+    }
 
     let xml = xmlbuilder.create({
         annotation: {
@@ -362,10 +341,10 @@ app.post('/image', (req: any, res: any) => {
             },
             size: {
                 width: {
-                    '#text': width
+                    '#text': bboxes[0].width
                 },
                 height: {
-                    '#text': height
+                    '#text': bboxes[0].height
                 },
                 depth: {
                     '#text': '3'
@@ -374,37 +353,11 @@ app.post('/image', (req: any, res: any) => {
             segmented: {
                 '#text': '0'
             },
-            object: {
-                name: {
-                    '#text': `${labels}`
-                },
-                pose: {
-                    '#text': 'Unspecified'
-                },
-                truncated: {
-                    '#text': '0'
-                },
-                difficult: {
-                    '#text': '0'
-                },
-                bndbox: {
-                    xmin: {
-                        '#text': xmin
-                    },
-                    ymin: {
-                        '#text': ymin
-                    },
-                    xmax: {
-                        '#text': xmax
-                    },
-                    ymax: {
-                        '#text': ymax
-                    }
-                }
-            }
+            object: objects
         }
     });
 
+    // Writing on disk xml file
     fs.writeFile(path.resolve(annotationsPath, `screenshot${guid}.xml`), xml, (error) => {
         if (error) {
             // there was an error
@@ -414,8 +367,6 @@ app.post('/image', (req: any, res: any) => {
             console.log(`.xml file written successfully`);
         }
     });
-
-    // **** TENSORFLOW PASCAL VOC ****
 
     res.end('success');
 });

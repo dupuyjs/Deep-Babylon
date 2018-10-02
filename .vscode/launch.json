@@ -8,11 +8,19 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
+            "name": "Launch Server",
             "program": "${workspaceFolder}\\app.ts",
             "outFiles": [
                 "${workspaceFolder}/out/**/*.js"
             ],
+            "sourceMaps": true
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Chrome",
+            "url": "http://localhost:8081",
+            "webRoot": "${workspaceFolder}/out/scripts",
             "sourceMaps": true
         }
     ]

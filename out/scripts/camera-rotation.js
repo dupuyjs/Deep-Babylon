@@ -2,7 +2,7 @@ class CustomCameraRotation {
     constructor() {
         this._zoomStopsAnimation = false;
         this._idleRotationAlphaSpeed = 0.3;
-        this._idleRotationBetaSpeed = 0.1;
+        this._idleRotationBetaSpeed = 0.05;
         this._idleRotationWaitTime = 2000;
         this._idleRotationSpinupTime = 2000;
         // Default behavior functions
@@ -106,24 +106,36 @@ class CustomCameraRotation {
             this._cameraRotationBetaSpeed = this._idleRotationBetaSpeed * scale;
             // Step camera rotation by rotation speed
             if (this._attachedCamera) {
-                this._attachedCamera.alpha -= this._cameraRotationAlphaSpeed * (dt / 1000);
+                //this._attachedCamera.alpha -= this._cameraRotationAlphaSpeed * (dt / 1000);
                 if (this._isBetaDirectionUp) {
                     this._attachedCamera.beta -= this._cameraRotationBetaSpeed * (dt / 1000);
-                    //this._attachedCamera.radius += 0.01;
                     if (this._attachedCamera.beta < 0.1) {
                         this._isBetaDirectionUp = false;
                     }
                 }
                 else {
                     this._attachedCamera.beta += this._cameraRotationBetaSpeed * (dt / 1000);
-                    if (this._attachedCamera.radius > this._cameraRotationInitialRadius) {
-                        //this._attachedCamera.radius -= 0.01;
-                    }
-                    if (this._attachedCamera.beta > (Math.PI - 0.1)) {
+                    if (this._attachedCamera.beta > (Math.PI / 4 - 0.1)) {
                         this._isBetaDirectionUp = true;
                     }
-                    console.log(this._attachedCamera.beta);
                 }
+                // if (this._isBetaDirectionUp) {
+                //     this._attachedCamera.beta -= this._cameraRotationBetaSpeed * (dt / 1000);
+                //     //this._attachedCamera.radius += 0.01;
+                //     if (this._attachedCamera.beta < 0.1) {
+                //         this._isBetaDirectionUp = false;
+                //     }
+                // }
+                // else {
+                //     this._attachedCamera.beta += this._cameraRotationBetaSpeed * (dt / 1000);
+                //     if (this._attachedCamera.radius > this._cameraRotationInitialRadius) {
+                //         //this._attachedCamera.radius -= 0.01;
+                //     }
+                //     if (this._attachedCamera.beta > (Math.PI -0.1)) {
+                //         this._isBetaDirectionUp = true;
+                //     }
+                //     console.log(this._attachedCamera.beta);
+                // }
             }
         });
     }

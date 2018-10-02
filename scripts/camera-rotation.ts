@@ -6,13 +6,13 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
 
     private _zoomStopsAnimation = false;
     private _idleRotationAlphaSpeed = 0.3;
-    private _idleRotationBetaSpeed = 0.1;
+    private _idleRotationBetaSpeed = 0.05;
     private _idleRotationWaitTime = 2000;
     private _idleRotationSpinupTime = 2000;
 
     // Default behavior functions
     private _onPrePointerObservableObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.PointerInfoPre>> = null;
-    private _onAfterCheckInputsObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Camera>>  = null;
+    private _onAfterCheckInputsObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Camera>> = null;
     private _attachedCamera: BABYLON.Nullable<BABYLON.ArcRotateCamera> = null;
     private _isPointerDown = false;
     private _lastFrameTime: BABYLON.Nullable<number> = null;
@@ -20,7 +20,7 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
     private _cameraRotationAlphaSpeed: number = 0;
     private _cameraRotationBetaSpeed: number = 0;
     private _cameraRotationInitialRadius: number = 0;
-    private _isBetaDirectionUp = true; 
+    private _isBetaDirectionUp = true;
 
     /**
 	* Sets the flag that indicates if user zooming should stop animation.
@@ -123,30 +123,46 @@ class CustomCameraRotation implements BABYLON.Behavior<BABYLON.ArcRotateCamera> 
 
             // Step camera rotation by rotation speed
             if (this._attachedCamera) {
-                this._attachedCamera.alpha -= this._cameraRotationAlphaSpeed * (dt / 1000);
+                //this._attachedCamera.alpha -= this._cameraRotationAlphaSpeed * (dt / 1000);
 
-            
                 if (this._isBetaDirectionUp) {
+
                     this._attachedCamera.beta -= this._cameraRotationBetaSpeed * (dt / 1000);
-                    //this._attachedCamera.radius += 0.01;
 
                     if (this._attachedCamera.beta < 0.1) {
                         this._isBetaDirectionUp = false;
                     }
                 }
+
                 else {
                     this._attachedCamera.beta += this._cameraRotationBetaSpeed * (dt / 1000);
 
-                    if (this._attachedCamera.radius > this._cameraRotationInitialRadius) {
-                        //this._attachedCamera.radius -= 0.01;
-                    }
-
-                    if (this._attachedCamera.beta > (Math.PI -0.1)) {
+                    if (this._attachedCamera.beta > (Math.PI/4 - 0.1)) {
                         this._isBetaDirectionUp = true;
                     }
-                    console.log(this._attachedCamera.beta);
                 }
-                     
+                
+                // if (this._isBetaDirectionUp) {
+                //     this._attachedCamera.beta -= this._cameraRotationBetaSpeed * (dt / 1000);
+                //     //this._attachedCamera.radius += 0.01;
+
+                //     if (this._attachedCamera.beta < 0.1) {
+                //         this._isBetaDirectionUp = false;
+                //     }
+                // }
+                // else {
+                //     this._attachedCamera.beta += this._cameraRotationBetaSpeed * (dt / 1000);
+
+                //     if (this._attachedCamera.radius > this._cameraRotationInitialRadius) {
+                //         //this._attachedCamera.radius -= 0.01;
+                //     }
+
+                //     if (this._attachedCamera.beta > (Math.PI -0.1)) {
+                //         this._isBetaDirectionUp = true;
+                //     }
+                //     console.log(this._attachedCamera.beta);
+                // }
+
             }
         });
     }
