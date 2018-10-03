@@ -1,28 +1,26 @@
 # Deep Babylon
 
+### Prerequisites
+
+[Visual Studio Code](https://code.visualstudio.com/)
+[TypeScript](https://www.npmjs.com/package/typescript)
+
 ### Installation
 
-1. Run `npm install` in the `Deep-Babylon` directory.
-
-2. Add `.env` file to the root directory with **Custom Vision Training Key** located in https://www.customvision.ai/projects#/settings (select Limited Trial account) with the following syntax.
-
-```powershell
-# Custom Vision Training Key
-COGNITIVE_CUSTOM_VISION_API_TRAININGKEY=7eeeeecb25dc4c0eabbbbbbbbbb3dbbd
-```
+- Clone the repository
+- Run `npm install` in the `Deep-Babylon` directory
 
 ### Run Deep Babylon
 
-Run `npm start` in the `Deep-Babylon` directory.
+- Run `npm start` in the `Deep-Babylon` directory
+- Launch http://localhost:8081/ on your favorite browser
 
-
-### Notes
+### Notes 
 
 export PYTHONPATH=$PYTHONPATH:`pwd`:`pwd`/slim 
 
-Upload the content on ./models/research/object_detection/deep_babylon.
+Upload the content on ./models/research/object_detection/deep_babylon
 Unzip data.zip
-
 
 python train.py --logtostderr --train_dir=./models/train --pipeline_config_path=faster_rcnn_inception_v2_babylon.config
 
