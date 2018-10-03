@@ -8,7 +8,7 @@ class WorkSpace {
     private _engine: BABYLON.Engine;
     private _scene: BABYLON.Scene;
     private _isBoundingBox: boolean = true;
-    private _isCaptureBox: boolean = false;
+    private _isCaptureInProgress: boolean = false;
     private _countPendingImages: number = 0;
     private _countCompletedImages: number = 0;
     private _meshes: BABYLON.Mesh[] = [];
@@ -28,10 +28,10 @@ class WorkSpace {
             };
         }
 
-        let captureCheckBox = document.getElementById("captureCheckBox") as HTMLInputElement;
-        if (captureCheckBox) {
-            captureCheckBox.onclick = (ev: any) => {
-                this._isCaptureBox = boundingCheckBox.checked;
+        let captureButton = document.getElementById("captureButton") as HTMLInputElement;
+        if (captureButton) {
+            captureButton.onclick = (ev: any) => {
+                this._isCaptureInProgress = true;
             };
         }
 
@@ -396,7 +396,7 @@ class WorkSpace {
                     this._scene.render();
 
                     let bboxes = this.drawAIBoundingBox();
-                    if (bboxes && this._isCaptureBox) {
+                    if (bboxes && this._isCaptureInProgress) {
                         this.uploadScreenshot(bboxes);
                     }
                 });
