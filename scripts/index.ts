@@ -1,10 +1,10 @@
 /// <reference path="camera-rotation.ts" />
-/// <reference path="client-settings.ts" />
 
 class WorkSpace {
 
     private _renderCanvas: HTMLCanvasElement;
     private _layerCanvas: HTMLCanvasElement;
+    private _maxCaptureTextBox : HTMLInputElement;
     private _engine: BABYLON.Engine;
     private _scene: BABYLON.Scene;
     private _isBoundingBox: boolean = true;
@@ -34,6 +34,8 @@ class WorkSpace {
                 this._isCaptureInProgress = true;
             };
         }
+
+        this._maxCaptureTextBox = document.getElementById("maxCapture") as HTMLInputElement;
 
         this._engine = new BABYLON.Engine(this._renderCanvas, true, { preserveDrawingBuffer: true });
         this._engine.enableOfflineSupport = false;
@@ -285,7 +287,8 @@ class WorkSpace {
     */
     uploadScreenshot(bboxes: BoundingBox[]): void {
 
-        if (this._scene.activeCamera && (this._countPendingImages < ClientSettings.MAX_IMAGES)) {
+        let MAX_IMAGES = parseInt(this._maxCaptureTextBox.value);
+        if (this._scene.activeCamera && (this._countPendingImages < MAX_IMAGES)) {
 
             this._countPendingImages += 1;
 
@@ -305,7 +308,8 @@ class WorkSpace {
                         this._countCompletedImages += 1;
                         console.log('upload succeded', data);
 
-                        if (this._countCompletedImages == ClientSettings.MAX_IMAGES) {
+                        if (this._countCompletedImages === MAX_IMAGES) {
+                            this._isCaptureInProgress = false;
                             this.triggerTraining();
                         }
                     })

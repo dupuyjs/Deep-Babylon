@@ -1,5 +1,4 @@
 /// <reference path="camera-rotation.ts" />
-/// <reference path="client-settings.ts" />
 class WorkSpace {
     constructor(renderCanvas, layerCanvas) {
         this._isBoundingBox = true;
@@ -23,6 +22,7 @@ class WorkSpace {
                 this._isCaptureInProgress = true;
             };
         }
+        this._maxCaptureTextBox = document.getElementById("maxCapture");
         this._engine = new BABYLON.Engine(this._renderCanvas, true, { preserveDrawingBuffer: true });
         this._engine.enableOfflineSupport = false;
         BABYLON.Engine.ShadersRepository = "/src/Shaders/";
@@ -219,7 +219,8 @@ class WorkSpace {
     * @return {BoundingBox[]} BoundingBox array.
     */
     uploadScreenshot(bboxes) {
-        if (this._scene.activeCamera && (this._countPendingImages < ClientSettings.MAX_IMAGES)) {
+        let MAX_IMAGES = parseInt(this._maxCaptureTextBox.value);
+        if (this._scene.activeCamera && (this._countPendingImages < MAX_IMAGES)) {
             this._countPendingImages += 1;
             BABYLON.Tools.CreateScreenshot(this._engine, this._scene.activeCamera, { precision: 1 }, (data) => {
                 fetch('http://localhost:8081/image', {
@@ -235,7 +236,8 @@ class WorkSpace {
                 }).then((data) => {
                     this._countCompletedImages += 1;
                     console.log('upload succeded', data);
-                    if (this._countCompletedImages == ClientSettings.MAX_IMAGES) {
+                    if (this._countCompletedImages === MAX_IMAGES) {
+                        this._isCaptureInProgress = false;
                         this.triggerTraining();
                     }
                 })
